@@ -1,3 +1,7 @@
 .env
 .venv
 __pycache__/
+titanic.db
+sakila.db
+output.json
+fname.json
