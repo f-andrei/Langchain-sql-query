@@ -1,11 +1,11 @@
 import json
 
-def save_fname(fname):
+def save_fname(fname: str):
     """Save the provided filename to a JSON file."""
     try:
         with open('fname.json', 'w') as file:
-            file_name = {"file_name": fname}
-            json.dump(file_name, file)
+            filename = {"filename": fname.lower()}
+            json.dump(filename, file)
     except Exception as e:
         print("Error occurred while saving filename:", e)
 
@@ -14,7 +14,7 @@ def load_fname():
     try:
         with open('fname.json', 'r') as file:
             data = json.load(file)
-            return data.get("file_name")
+            return data.get("filename")
     except FileNotFoundError:
         print("No saved filename found.")
         return None
