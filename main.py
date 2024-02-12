@@ -4,7 +4,7 @@ from langchain.memory import ConversationBufferMemory
 from langchain.chains import LLMChain
 from model_tools import DatabaseInfo, DatabasePath, QueryData
 from dotenv import load_dotenv
-from utils import save_fname
+from utils import save_fname, log_chat_history
 import os
 
 # Load environment variables
@@ -14,8 +14,8 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_KEY")
 
 # Initialize the ChatOpenAI object with the desired model
-model = ChatOpenAI(model="gpt-4-turbo-preview", api_key=OPENAI_API_KEY) # best model (but expensive)
-# model = ChatOpenAI(model="gpt-3.5-turbo", api_key=OPENAI_API_KEY)
+#model = ChatOpenAI(model="gpt-4-turbo-preview", api_key=OPENAI_API_KEY) # best model (but expensive)
+model = ChatOpenAI(model="gpt-3.5-turbo", api_key=OPENAI_API_KEY)
 
 
 # Instantiate tools for database operations
@@ -63,7 +63,7 @@ prompt = ZeroShotAgent.create_prompt(
 )
 
 # Instantiate model's memory
-memory = ConversationBufferMemory(memory_key="chat_history")
+memory = ConversationBufferMemory(memory_key="chat_history", input_key='input', output_key="output")
 
 # Create LLMChain with the model and prompt
 llm_chain = LLMChain(llm=model, prompt=prompt)
@@ -75,7 +75,8 @@ agent = ZeroShotAgent(llm_chain=llm_chain, tools=tools)
 agent_chain = AgentExecutor.from_agent_and_tools(
     agent=agent, tools=tools, verbose=True, memory=memory,
 )
-
+# Set return_intermediate_steps to True (returns the model's thought process as dict)
+agent_chain.return_intermediate_steps = True
 # Set parsing errors handling
 agent_chain.handle_parsing_errors = True
 
@@ -89,3 +90,11 @@ what is the average car price in sample database?"""
 
 # Invoke agent to answer the questions
 message = agent_chain.invoke(input=question)
+
+# Load chat history from memory (user input and final answer)
+chat_history = memory.load_memory_variables({})
+
+intermediate_steps = message["intermediate_steps"]
+
+# Log the chat history and intermediate steps
+log_chat_history(chat_history, intermediate_steps)
