@@ -1,46 +1,60 @@
+from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, Tool, ZeroShotAgent
 from langchain.memory import ConversationBufferMemory
-from langchain_openai import ChatOpenAI
 from langchain.chains import LLMChain
 from model_tools import DatabaseInfo, DatabasePath, QueryData
 from dotenv import load_dotenv
+from utils import save_fname
 import os
 
+# Load environment variables
 load_dotenv()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# Retrieve OpenAI API key from environment variables
+OPENAI_API_KEY = os.getenv("OPENAI_KEY")
 
-model = ChatOpenAI(model="gpt-3.5-turbo-0125", verbose=True, api_key=OPENAI_API_KEY)
+# Initialize the ChatOpenAI object with the desired model
+model = ChatOpenAI(model="gpt-4-turbo-preview", api_key=OPENAI_API_KEY) # best model (but expensive)
+# model = ChatOpenAI(model="gpt-3.5-turbo", api_key=OPENAI_API_KEY)
 
-db_fname = DatabasePath()
-dbinfo = DatabaseInfo()
-querydata = QueryData()
 
+# Instantiate tools for database operations
+db_path = DatabasePath()
+db_info = DatabaseInfo()
+query_data = QueryData()
+
+# Define tools available for the model
 tools = [
     Tool(
         name="DatabasePath",
-        func=db_fname.run,
+        func=db_path.run,
         description="Useful to find the file name of an SQLITE3 file. usually the file ends with '.db' and is a single word."
     ),
     Tool(
         name="DatabaseInfo",
-        func=dbinfo.run,
+        func=db_info.run,
         description="Useful to get the structure of an sqlite database, such as table names and columns."
     ),
     Tool(
         name="QueryData",
-        func=querydata.run,
-        description="Useful generate SQLite query"
+        func=query_data.run,
+        description="Useful to query data from a structural database. Takes only the SQL query."
     )
 ]
 
-prefix = """Assist a human by answering the following questions as best you can. You have access to the following tools:"""
+# Define prefix and suffix for model prompts
+prefix = """Assist a human by answering the following questions as best you can. 
+If there are more than one question, after answering the first, start from the beginning again.
+Remember for each question you have to first find the database filename, then its information,
+finally execute the SQL query.
+You have access to the following tools"""
 suffix = """Begin!"
 
 {chat_history}
 Question: {input}
 {agent_scratchpad}"""
 
+# Create prompt for the ZeroShotAgent
 prompt = ZeroShotAgent.create_prompt(
     tools,
     prefix=prefix,
@@ -48,17 +62,30 @@ prompt = ZeroShotAgent.create_prompt(
     input_variables=["input", "chat_history", "agent_scratchpad"],
 )
 
+# Instantiate model's memory
 memory = ConversationBufferMemory(memory_key="chat_history")
 
+# Create LLMChain with the model and prompt
 llm_chain = LLMChain(llm=model, prompt=prompt)
-agent = ZeroShotAgent(llm_chain=llm_chain, tools=tools, verbose=True, handle_parsing_error=True)
 
+# Instantiate ZeroShotAgent with LLMChain and tools
+agent = ZeroShotAgent(llm_chain=llm_chain, tools=tools)
+
+# Create AgentExecutor from agent and tools
 agent_chain = AgentExecutor.from_agent_and_tools(
     agent=agent, tools=tools, verbose=True, memory=memory,
 )
+
+# Set parsing errors handling
 agent_chain.handle_parsing_errors = True
 
-agent_chain.run(input="what is the movie count in the sakila db? what is the average house price in elite db? what is the average car price in elite db? answer one at a time")
+# Clear previous database path
+save_fname('')
 
+# Define sample questions
+question = """what is the movie count in the sakila database? 
+what is the average house price in sample database? 
+what is the average car price in sample database?"""
 
-
+# Invoke agent to answer the questions
+message = agent_chain.invoke(input=question)
